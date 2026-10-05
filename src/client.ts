@@ -1,4 +1,4 @@
-import { extractErrorMessage, friendlyError, parseSseDelta } from './pure';
+import { extractErrorMessage, friendlyError } from './pure';
 import {
   ChatCompletionRequest,
   ChatCompletionResponse,
@@ -7,6 +7,8 @@ import {
   KiyaraPublicModelsResponse,
   OpenAIModel,
   OpenAIModelsResponse,
+  OpenAIToolCall,
+  ToolCallDelta,
 } from './types';
 
 /** Ambil origin situs (tanpa path /v1) dari base URL. */
@@ -114,13 +116,13 @@ export class KiyaraClient {
 
   /**
    * Chat completion streaming. Memanggil onDelta untuk setiap potongan teks.
-   * Mengembalikan teks lengkap dan (opsional) usage bila server mengirimkannya.
+   * Mengembalikan teks lengkap dan tool calls (bila model memintanya).
    */
   async chatStream(
     req: ChatCompletionRequest,
     onDelta: (delta: string) => void | Promise<void>,
     token?: { isCancellationRequested: boolean; onCancellationRequested: (cb: () => void) => void }
-  ): Promise<string> {
+  ): Promise<StreamResult> {
     const res = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: { ...this.headers(), Accept: 'text/event-stream' },
@@ -140,6 +142,7 @@ export class KiyaraClient {
     const decoder = new TextDecoder('utf-8');
     let buffer = '';
     let full = '';
+    const toolCalls = new ToolCallAccumulator();
 
     try {
       // Baca stream baris demi baris (SSE: "data: {...}").
@@ -160,19 +163,122 @@ export class KiyaraClient {
           const data = line.slice(5).trim();
           if (data === '[DONE]') {
             buffer = '';
-            return full;
+            return { text: full, toolCalls: toolCalls.finish() };
           }
-          const delta = parseSseDelta(data);
-          if (delta) {
-            full += delta;
-            await onDelta(delta);
+          const parsed = parseSseChunk(data);
+          if (parsed.toolCallDeltas) {
+            toolCalls.add(parsed.toolCallDeltas);
+          }
+          if (parsed.content) {
+            full += parsed.content;
+            await onDelta(parsed.content);
+          }
+          // Beberapa server mengirim tool_calls utuh di message (non-delta).
+          if (parsed.messageToolCalls) {
+            toolCalls.addComplete(parsed.messageToolCalls);
           }
         }
       }
-      return full;
+      return { text: full, toolCalls: toolCalls.finish() };
     } finally {
       reader.releaseLock?.();
     }
+  }
+}
+
+/** Hasil satu permintaan streaming: teks + tool calls yang diminta model. */
+export interface StreamResult {
+  text: string;
+  toolCalls: OpenAIToolCall[];
+}
+
+/** Hasil parse satu baris JSON SSE. */
+export interface ParsedChunk {
+  content: string;
+  toolCallDeltas?: ToolCallDelta[];
+  messageToolCalls?: OpenAIToolCall[];
+}
+
+/** Kumpulkan tool calls yang datang bertahap lewat stream.
+ * OpenAI mengirim tool call secara bertahap: id & nama dulu, lalu arguments
+ * dipecah beberapa chunk, diindeks dengan `index`.
+ */
+export class ToolCallAccumulator {
+  private byIndex = new Map<number, { id: string; name: string; arguments: string }>();
+
+  add(deltas: ToolCallDelta[]): void {
+    for (const d of deltas) {
+      const index = typeof d.index === 'number' ? d.index : 0;
+      const entry = this.byIndex.get(index) ?? { id: '', name: '', arguments: '' };
+      if (d.id) {
+        entry.id = d.id;
+      }
+      if (d.function?.name) {
+        entry.name = d.function.name;
+      }
+      if (d.function?.arguments) {
+        entry.arguments += d.function.arguments;
+      }
+      this.byIndex.set(index, entry);
+    }
+  }
+
+  addComplete(calls: OpenAIToolCall[]): void {
+    for (const c of calls) {
+      const index = this.byIndex.size;
+      this.byIndex.set(index, {
+        id: c.id,
+        name: c.function?.name ?? '',
+        arguments: c.function?.arguments ?? '',
+      });
+    }
+  }
+
+  finish(): OpenAIToolCall[] {
+    return [...this.byIndex.values()]
+      .filter((e) => e.name)
+      .map((e, i) => ({
+        id: e.id || `call_${i}`,
+        type: 'function' as const,
+        function: {
+          name: e.name,
+          // Pastikan arguments selalu string JSON yang valid.
+          arguments: normalizeArguments(e.arguments),
+        },
+      }));
+  }
+}
+
+/** Pastikan arguments berbentuk string JSON object yang valid. */
+function normalizeArguments(raw: string): string {
+  const trimmed = (raw ?? '').trim();
+  if (!trimmed) {
+    return '{}';
+  }
+  // Sebagian model kadang dobel-encode atau tidak valid; fallback ke {}.
+  try {
+    const parsed = JSON.parse(trimmed);
+    return JSON.stringify(parsed);
+  } catch {
+    return trimmed.startsWith('{') ? trimmed : '{}';
+  }
+}
+
+/** Ambil konten & tool_calls dari satu baris JSON SSE. */
+export function parseSseChunk(json: string): ParsedChunk {
+  try {
+    const obj = JSON.parse(json) as ChatCompletionResponse;
+    const choice = obj?.choices?.[0];
+    const content = choice?.delta?.content ?? '';
+    const toolCallDeltas = choice?.delta?.tool_calls;
+    const messageToolCalls = choice?.message?.tool_calls;
+    return {
+      content: typeof content === 'string' ? content : '',
+      toolCallDeltas: Array.isArray(toolCallDeltas) ? toolCallDeltas : undefined,
+      messageToolCalls: Array.isArray(messageToolCalls) ? messageToolCalls : undefined,
+    };
+  } catch {
+    return { content: '' };
   }
 }
 

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { fetchPublicModels, KiyaraClient } from './client';
 import { KiyaraConfig } from './config';
+import { logDebug } from './log';
 import {
   estimateTokens,
   familyOf,
@@ -10,7 +11,7 @@ import {
   isToolCapable,
   resolveMaxOutputTokens,
 } from './pure';
-import { ChatMessage, KiyaraApiError, KiyaraPublicModel, OpenAIModel } from './types';
+import { ChatMessage, KiyaraApiError, KiyaraPublicModel, OpenAIModel, OpenAITool, OpenAIToolCall } from './types';
 
 /** Metadata gabungan untuk satu model Kiyara. */
 interface ModelInfo {
@@ -133,7 +134,7 @@ export class KiyaraLanguageModelProvider implements vscode.LanguageModelChatProv
   async provideLanguageModelChatResponse(
     model: vscode.LanguageModelChatInformation,
     messages: readonly vscode.LanguageModelChatRequestMessage[],
-    _options: vscode.ProvideLanguageModelChatResponseOptions,
+    options: vscode.ProvideLanguageModelChatResponseOptions,
     progress: vscode.Progress<vscode.LanguageModelResponsePart>,
     token: vscode.CancellationToken
   ): Promise<void> {
@@ -147,19 +148,52 @@ export class KiyaraLanguageModelProvider implements vscode.LanguageModelChatProv
     const temperature = this.config.temperature;
     const maxTokens = this.config.maxTokens;
 
+    // Teruskan tools dari VS Code ke API (kalau ada).
+    const tools = convertTools(options.tools);
+    const toolChoice = convertToolMode(options.toolMode, tools.length > 0);
+
+    logDebug(
+      `Request model=${model.id} messages=${openAiMessages.length} ` +
+        `tools=${tools.length} toolMode=${options.toolMode ?? '-'} toolChoice=${toolChoice ?? '-'}`
+    );
+    if (tools.length > 0) {
+      logDebug(`Tool names: ${tools.map((t) => t.function.name).join(', ')}`);
+    }
+
     try {
-      await client.chatStream(
+      const result = await client.chatStream(
         {
           model: model.id,
           messages: openAiMessages,
           temperature,
           max_tokens: maxTokens > 0 ? maxTokens : undefined,
+          tools: tools.length > 0 ? tools : undefined,
+          tool_choice: toolChoice,
         },
         (delta) => {
           progress.report(new vscode.LanguageModelTextPart(delta));
         },
         token
       );
+
+      // Kembalikan tool calls (bila model memintanya) ke VS Code.
+      if (result.toolCalls.length > 0) {
+        logDebug(
+          `Model meminta ${result.toolCalls.length} tool call: ` +
+            result.toolCalls.map((c) => c.function.name).join(', ')
+        );
+      }
+      for (const call of result.toolCalls) {
+        let input: object = {};
+        try {
+          input = JSON.parse(call.function.arguments || '{}');
+        } catch {
+          input = {};
+        }
+        progress.report(
+          new vscode.LanguageModelToolCallPart(call.id, call.function.name, input)
+        );
+      }
     } catch (err) {
       if (err instanceof KiyaraApiError) {
         throw new Error(err.message);
@@ -184,7 +218,7 @@ export class KiyaraLanguageModelProvider implements vscode.LanguageModelChatProv
 /*                              Konversi pesan                                */
 /* -------------------------------------------------------------------------- */
 
-/** VS Code message -> OpenAI chat message. */
+/** VS Code message -> OpenAI chat message (termasuk tool call & hasil tool). */
 function convertMessages(
   messages: readonly vscode.LanguageModelChatRequestMessage[]
 ): ChatMessage[] {
@@ -196,12 +230,105 @@ function convertMessages(
         : msg.role === vscode.LanguageModelChatMessageRole.Assistant
           ? 'assistant'
           : 'system';
-    const content = messageToPlainText(msg);
+
+    // Pisahkan tool call & hasil tool dari bagian teks biasa.
+    const toolCalls: OpenAIToolCall[] = [];
+    const toolResults: vscode.LanguageModelToolResultPart[] = [];
+    const textParts: string[] = [];
+
+    for (const part of msg.content) {
+      if (part instanceof vscode.LanguageModelTextPart) {
+        textParts.push(part.value);
+      } else if (part instanceof vscode.LanguageModelToolCallPart) {
+        toolCalls.push({
+          id: part.callId,
+          type: 'function',
+          function: {
+            name: part.name,
+            arguments: JSON.stringify(part.input ?? {}),
+          },
+        });
+      } else if (part instanceof vscode.LanguageModelToolResultPart) {
+        toolResults.push(part);
+      } else if (typeof part === 'string') {
+        textParts.push(part);
+      }
+    }
+
+    const content = textParts.join('');
+
+    // Pesan hasil tool: satu pesan per hasil, dengan role "tool".
+    if (toolResults.length > 0) {
+      for (const result of toolResults) {
+        out.push({
+          role: 'tool',
+          tool_call_id: result.callId,
+          content: toolResultText(result),
+        });
+      }
+      // Bila ada teks tambahan menyertai hasil tool, kirim sebagai user.
+      if (content) {
+        out.push({ role: 'user', content });
+      }
+      continue;
+    }
+
+    // Pesan assistant dengan tool_calls.
+    if (role === 'assistant' && toolCalls.length > 0) {
+      out.push({
+        role: 'assistant',
+        content: content || null,
+        tool_calls: toolCalls,
+      });
+      continue;
+    }
+
     if (content) {
       out.push({ role, content });
     }
   }
   return out;
+}
+
+/** Ubah konten hasil tool menjadi teks. */
+function toolResultText(result: vscode.LanguageModelToolResultPart): string {
+  const parts: string[] = [];
+  for (const c of result.content) {
+    if (c instanceof vscode.LanguageModelTextPart) {
+      parts.push(c.value);
+    } else if (typeof c === 'string') {
+      parts.push(c);
+    }
+  }
+  return parts.join('') || JSON.stringify(result.content);
+}
+
+/** VS Code tools -> tool format OpenAI. */
+function convertTools(
+  tools: readonly vscode.LanguageModelChatTool[] | undefined
+): OpenAITool[] {
+  if (!tools || tools.length === 0) {
+    return [];
+  }
+  return tools.map((t) => ({
+    type: 'function' as const,
+    function: {
+      name: t.name,
+      description: t.description,
+      parameters: t.inputSchema ?? { type: 'object', properties: {} },
+    },
+  }));
+}
+
+/** Mode tool VS Code -> tool_choice OpenAI. */
+function convertToolMode(
+  mode: vscode.LanguageModelChatToolMode | undefined,
+  hasTools: boolean
+): 'auto' | 'required' | undefined {
+  if (!hasTools) {
+    return undefined;
+  }
+  return mode === vscode.LanguageModelChatToolMode.Required ? 'required' : 'auto';
 }
 
 /** Gabungkan semua bagian teks dari satu pesan menjadi string. */

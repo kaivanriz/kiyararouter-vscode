@@ -2,7 +2,7 @@
   "name": "kiyara-ai",
   "displayName": "KiyaraRouter for VS Code",
   "description": "Hubungkan model AI dari Kiyara (kiyararouter.web.id) ke VS Code. Chat dan coding dengan satu API key.",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "publisher": "kiyara",
   "license": "MIT",
   "engines": {
@@ -87,6 +87,10 @@
       {
         "command": "kiyara.showStatus",
         "title": "Kiyara: Tampilkan Status Koneksi"
+      },
+      {
+        "command": "kiyara.showLog",
+        "title": "Kiyara: Tampilkan Log (Debug)"
       }
     ],
     "configuration": {
@@ -149,6 +153,11 @@
           },
           "default": [],
           "description": "Override deteksi vision (input gambar). Isi kode model yang PASTI mendukung gambar (mis. \"anthropic/claude-opus-5.5\"). Beri awalan \"-\" untuk menandai model yang BUKAN vision (mis. \"-openai/gpt-6-luna\"). Bila kosong, deteksi memakai tebakan dari pola nama model."
+        },
+        "kiyara.debug": {
+          "type": "boolean",
+          "default": false,
+          "description": "Aktifkan log debug (jumlah tool yang dikirim, tool yang diminta model, dll) di panel Output 'KiyaraRouter'."
         }
       }
     }
@@ -162,7 +171,7 @@
     "watch": "tsc -watch -p ./ --noEmit",
     "lint": "eslint src --ext ts",
     "test": "npm run test:unit && npm run test:smoke",
-    "test:unit": "tsx --test test/unit.test.ts",
+    "test:unit": "tsx --test test/unit.test.ts test/toolcalls.test.ts",
     "test:smoke": "tsx --test test/smoke.test.ts",
     "pretest:integration": "npm run esbuild && tsc -p ./tsconfig.test.json",
     "test:integration": "node out-test/integration/runTest.js",

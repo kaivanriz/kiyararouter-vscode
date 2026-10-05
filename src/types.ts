@@ -41,11 +41,35 @@ export interface KiyaraPublicModelsResponse {
   items: KiyaraPublicModel[];
 }
 
-export type ChatRole = 'system' | 'user' | 'assistant';
+export type ChatRole = 'system' | 'user' | 'assistant' | 'tool';
+
+/** Definisi tool (format OpenAI). */
+export interface OpenAITool {
+  type: 'function';
+  function: {
+    name: string;
+    description?: string;
+    parameters?: object;
+  };
+}
+
+/** Panggilan tool dari assistant (format OpenAI). */
+export interface OpenAIToolCall {
+  id: string;
+  type: 'function';
+  function: {
+    name: string;
+    arguments: string;
+  };
+}
 
 export interface ChatMessage {
   role: ChatRole;
-  content: string;
+  content: string | null;
+  /** Tool calls yang diminta assistant (bila role = assistant). */
+  tool_calls?: OpenAIToolCall[];
+  /** ID tool call yang dijawab (bila role = tool). */
+  tool_call_id?: string;
 }
 
 export interface ChatCompletionRequest {
@@ -54,12 +78,24 @@ export interface ChatCompletionRequest {
   stream?: boolean;
   temperature?: number;
   max_tokens?: number;
+  tools?: OpenAITool[];
+  tool_choice?: 'auto' | 'required' | 'none';
+}
+
+export interface ToolCallDelta {
+  index: number;
+  id?: string;
+  type?: string;
+  function?: {
+    name?: string;
+    arguments?: string;
+  };
 }
 
 export interface ChatCompletionChoice {
   index: number;
-  message?: { role: string; content: string | null };
-  delta?: { role?: string; content?: string | null };
+  message?: { role: string; content: string | null; tool_calls?: OpenAIToolCall[] };
+  delta?: { role?: string; content?: string | null; tool_calls?: ToolCallDelta[] };
   finish_reason?: string | null;
 }
 

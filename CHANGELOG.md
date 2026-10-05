@@ -5,6 +5,21 @@ Semua perubahan penting pada ekstensi "KiyaraRouter for VS Code" didokumentasika
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
+## [0.2.0] - 2026-10-05
+
+### Added
+
+- **Dukungan tool calling penuh** — extension kini meneruskan daftar tool dari
+  VS Code ke API KiyaraRouter, membaca `tool_calls` dari respons (termasuk yang
+  datang bertahap lewat stream), mengembalikannya ke VS Code, dan meneruskan
+  hasil tool kembali ke model. Ini mengaktifkan mode **Agent** dan fitur seperti
+  `read_codebase` / akses file.
+
+### Fixed
+
+- Sebelumnya daftar tool tidak diteruskan ke API, sehingga model tertentu
+  mengeluarkan pemanggilan tool sebagai teks mentah (mis. `<invoke ...>`).
+
 ## [0.1.2] - 2026-10-05
 
 ### Changed

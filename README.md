@@ -10,6 +10,7 @@ Ekstensi ini mendaftarkan KiyaraRouter sebagai **provider model bahasa** untuk V
 
 - **Model KiyaraRouter di pemilih model** — semua model yang tersedia di akun Anda muncul otomatis.
 - **Context window, harga & kapabilitas asli** — setiap model menampilkan ukuran konteks, harga per 1M token, status vision, dan tool calling yang benar (diambil dari katalog KiyaraRouter).
+- **Tool calling** — mendukung mode Agent di VS Code Chat (akses file, `read_codebase`, dll). Tool dari VS Code diteruskan ke model, dan hasil tool dikembalikan dengan benar.
 - **Streaming** — balasan mengalir real-time.
 - **Satu endpoint** — cukup masukkan API key, endpoint (`kiyararouter.web.id`) sudah tetap.
 - **API key aman** — disimpan di SecretStorage VS Code (bukan di settings/teks biasa).
@@ -71,6 +72,7 @@ Endpoint sudah tetap (`https://kiyararouter.web.id/v1`) — Anda tidak perlu men
 | `kiyara.defaultMaxOutputTokens` | `8192` | *Fallback* batas output bila context window tak diketahui |
 | `kiyara.modelAllowList` | `[]` | Bila diisi, hanya model ini yang dimunculkan |
 | `kiyara.visionModels` | `[]` | Override deteksi vision. Isi kode model untuk memaksa vision, beri awalan `-` untuk memaksa non-vision |
+| `kiyara.debug` | `false` | Log debug (tool dikirim/diminta) di panel Output "KiyaraRouter" |
 
 > **Context window, harga, dan kapabilitas** diambil otomatis dari katalog KiyaraRouter (`/api/public/models`). Batas output dihitung sebagai ~¼ dari context window (maksimum 64K token). Model kategori `decision` dan model yang ditandai tidak tersedia disembunyikan dari pemilih.
 >

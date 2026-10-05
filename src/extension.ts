@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { fetchPublicModels, KiyaraClient } from './client';
 import { KiyaraConfig } from './config';
 import { KiyaraLanguageModelProvider } from './provider';
+import { initLogger, showLog } from './log';
 import { formatContext, formatPrice } from './pure';
 import { KiyaraPublicModel, OpenAIModel } from './types';
 
@@ -17,6 +18,7 @@ let cachedPublic: Map<string, KiyaraPublicModel> = new Map();
 export function activate(context: vscode.ExtensionContext): void {
   config = new KiyaraConfig(context);
   provider = new KiyaraLanguageModelProvider(config);
+  initLogger(context);
 
   // Daftarkan model KiyaraRouter ke VS Code (muncul di dropdown model Copilot).
   context.subscriptions.push(
@@ -89,6 +91,7 @@ function registerCommands(context: vscode.ExtensionContext): void {
         { label: '$(trash) Hapus API Key', cmd: `${PREFIX}.clearApiKey`, when: !!key },
         { label: '$(refresh) Muat Ulang Daftar Model', cmd: `${PREFIX}.refreshModels` },
         { label: '$(comment-discussion) Buka Chat Copilot', cmd: `${PREFIX}.openChat` },
+        { label: '$(output) Tampilkan Log (Debug)', cmd: `${PREFIX}.showLog` },
       ]
         .filter((i) => i.when === undefined || i.when)
         .map(({ label, cmd }) => ({ label, cmd })),
@@ -204,6 +207,8 @@ function registerCommands(context: vscode.ExtensionContext): void {
       );
     }
   });
+
+  reg(`${PREFIX}.showLog`, () => showLog());
 
   reg(`${PREFIX}.showStatus`, async () => {
     const key = await config.getApiKey();
