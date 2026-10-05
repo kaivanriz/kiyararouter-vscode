@@ -5,6 +5,13 @@ Semua perubahan penting pada ekstensi "KiyaraRouter for VS Code" didokumentasika
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
+## [0.1.2] - 2026-10-05
+
+### Changed
+
+- Menambahkan tag `language-models`, `copilot`, `byok`, dan tag relevan lain
+  agar extension mudah ditemukan di Marketplace.
+
 ## [0.1.1] - 2026-10-05
 
 ### Changed

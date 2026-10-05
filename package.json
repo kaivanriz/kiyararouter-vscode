@@ -2,7 +2,7 @@
   "name": "kiyara-ai",
   "displayName": "KiyaraRouter for VS Code",
   "description": "Hubungkan model AI dari Kiyara (kiyararouter.web.id) ke VS Code. Chat dan coding dengan satu API key.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "kiyara",
   "license": "MIT",
   "engines": {
@@ -16,10 +16,21 @@
   "keywords": [
     "ai",
     "chat",
+    "language-models",
+    "language-model",
+    "copilot",
+    "chat-provider",
+    "byok",
+    "bring-your-own-key",
     "kiyara",
+    "kiyararouter",
     "openai",
+    "anthropic",
+    "gemini",
+    "deepseek",
     "llm",
-    "assistant"
+    "assistant",
+    "code-generation"
   ],
   "icon": "media/icon.png",
   "repository": {
