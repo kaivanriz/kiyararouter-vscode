@@ -5,6 +5,13 @@ Semua perubahan penting pada ekstensi "KiyaraRouter for VS Code" didokumentasika
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
+## [0.1.1] - 2026-10-05
+
+### Changed
+
+- Menambahkan tautan repositori & issue tracker GitHub
+  ([kaivanriz/kiyararouter-vscode](https://github.com/kaivanriz/kiyararouter-vscode)).
+
 ## [0.1.0] - 2026-10-05
 
 ### Added
