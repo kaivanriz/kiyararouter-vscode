@@ -1,0 +1,175 @@
+{
+  "name": "kiyara-ai",
+  "displayName": "KiyaraRouter for VS Code",
+  "description": "Hubungkan model AI dari Kiyara (kiyararouter.web.id) ke VS Code. Chat dan coding dengan satu API key.",
+  "version": "0.1.0",
+  "publisher": "kiyara",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.104.0"
+  },
+  "categories": [
+    "AI",
+    "Chat",
+    "Programming Languages"
+  ],
+  "keywords": [
+    "ai",
+    "chat",
+    "kiyara",
+    "openai",
+    "llm",
+    "assistant"
+  ],
+  "icon": "media/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kiyara/kiyara-ai-vscode"
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "languageModelChatProviders": [
+      {
+        "vendor": "kiyara",
+        "displayName": "KiyaraRouter",
+        "managementCommand": "kiyara.manageProvider"
+      }
+    ],
+    "commands": [
+      {
+        "command": "kiyara.setApiKey",
+        "title": "Kiyara: Atur API Key",
+        "icon": "$(key)"
+      },
+      {
+        "command": "kiyara.manageProvider",
+        "title": "Kiyara: Kelola Provider (API Key & Model)",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "kiyara.clearApiKey",
+        "title": "Kiyara: Hapus API Key",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "kiyara.selectModel",
+        "title": "Kiyara: Pilih Model",
+        "icon": "$(list-selection)"
+      },
+      {
+        "command": "kiyara.refreshModels",
+        "title": "Kiyara: Muat Ulang Daftar Model",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "kiyara.openChat",
+        "title": "Kiyara: Buka Chat",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "kiyara.showStatus",
+        "title": "Kiyara: Tampilkan Status Koneksi"
+      }
+    ],
+    "configuration": {
+      "title": "KiyaraRouter",
+      "properties": {
+        "kiyara.model": {
+          "type": "string",
+          "default": "",
+          "description": "Kode model aktif (mis. z-ai/glm-5.3). Kosongkan untuk memilih saat pertama pakai."
+        },
+        "kiyara.systemPrompt": {
+          "type": "string",
+          "default": "Kamu adalah asisten coding ahli yang membantu di dalam VS Code. Jawab ringkas, jelaskan singkat, dan berikan kode yang benar. Gunakan format Markdown dengan code block berlabel bahasa.",
+          "description": "System prompt default untuk chat."
+        },
+        "kiyara.temperature": {
+          "type": "number",
+          "default": 0.3,
+          "minimum": 0,
+          "maximum": 2,
+          "description": "Tingkat kreativitas model (0-2)."
+        },
+        "kiyara.maxTokens": {
+          "type": "number",
+          "default": 0,
+          "description": "Batas token output. 0 = biarkan server/model menentukan."
+        },
+        "kiyara.sendActiveFile": {
+          "type": "boolean",
+          "default": true,
+          "description": "Otomatis sertakan isi file aktif sebagai konteks saat chat."
+        },
+        "kiyara.includeSelection": {
+          "type": "boolean",
+          "default": true,
+          "description": "Otomatis sertakan teks yang dipilih sebagai konteks saat chat."
+        },
+        "kiyara.defaultMaxInputTokens": {
+          "type": "number",
+          "default": 128000,
+          "description": "Nilai maxInputTokens yang dilaporkan ke VS Code untuk model Kiyara (dipakai untuk manajemen konteks)."
+        },
+        "kiyara.defaultMaxOutputTokens": {
+          "type": "number",
+          "default": 8192,
+          "description": "Nilai maxOutputTokens yang dilaporkan ke VS Code untuk model Kiyara."
+        },
+        "kiyara.modelAllowList": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Bila diisi, hanya model dengan kode ini yang dimunculkan di daftar model Copilot."
+        },
+        "kiyara.visionModels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Override deteksi vision (input gambar). Isi kode model yang PASTI mendukung gambar (mis. \"anthropic/claude-opus-5.5\"). Beri awalan \"-\" untuk menandai model yang BUKAN vision (mis. \"-openai/gpt-6-luna\"). Bila kosong, deteksi memakai tebakan dari pola nama model."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run esbuild-base -- --minify",
+    "esbuild-base": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
+    "esbuild": "npm run esbuild-base -- --sourcemap",
+    "esbuild-watch": "npm run esbuild-base -- --sourcemap --watch",
+    "compile": "tsc -p ./ --noEmit",
+    "watch": "tsc -watch -p ./ --noEmit",
+    "lint": "eslint src --ext ts",
+    "test": "npm run test:unit && npm run test:smoke",
+    "test:unit": "tsx --test test/unit.test.ts",
+    "test:smoke": "tsx --test test/smoke.test.ts",
+    "pretest:integration": "npm run esbuild && tsc -p ./tsconfig.test.json",
+    "test:integration": "node out-test/integration/runTest.js",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.104.0",
+    "@typescript-eslint/eslint-plugin": "^7.13.0",
+    "@typescript-eslint/parser": "^7.13.0",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^2.29.0",
+    "esbuild": "^0.21.5",
+    "eslint": "^8.57.0",
+    "mocha": "^10.8.2",
+    "tsx": "^4.23.15",
+    "typescript": "^5.4.5"
+  },
+  "allowScripts": {
+    "esbuild@0.21.5": true,
+    "@vscode/vsce-sign@2.1.0": true,
+    "esbuild@0.28.2": true
+  }
+}
